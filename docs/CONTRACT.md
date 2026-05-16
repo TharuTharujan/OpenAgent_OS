@@ -25,7 +25,7 @@ Use these names as the shared contract between the kernel and UI. Implementation
 | `approvals:listPending` | query | Return pending human approval requests. | Person A |
 | `events:listByExecution` | query | Return trace events for one execution. | Person A |
 | `kernel:proposeExecution` | mutation | Agent syscall to propose or request an action execution. | Person A |
-| `kernel:approveExecution` | mutation | Human syscall to approve a pending execution. | Person A |
+| `kernel:approveExecution` | mutation | Human syscall to approve a pending execution. Optional `operatorHint` (max 200 chars) is stored on the approval event for audit demos. | Person A |
 | `kernel:rejectExecution` | mutation | Human syscall to reject a pending execution. | Person A |
 | `kernel:seedDemo` | mutation | Seed repeatable demo world objects, manifests, and agents. | Person A |
 | `kernel:resetDemo` | mutation | Reset demo data so the walkthrough can run again. | Person A |
@@ -87,6 +87,24 @@ export type Event = {
 };
 ```
 
+### Event payload conventions (optional keys)
+
+Convex may attach these keys inside `payload` for demo traceability. They are not required for all events:
+
+- `eventSource`: `"kernel"` | `"agent"` | `"control_tower"` — who emitted the event.
+- `actorHint`: short string such as `agent:openagentos-demo-agent` or a human operator label from `operatorHint`.
+
+### Permissions model (MVP)
+
+- Each execution is evaluated against the `permissions` table for `(agentId, actionName)`.
+- **Default deny**: if there is no explicit `allow` row for that pair, the execution is **denied** (unless you add a row).
+- An explicit `deny` row always wins over `allow` for the same pair.
+- `kernel:seedDemo` inserts `allow` rows for the demo agent so the packaged walkthrough works out of the box.
+
+### Unimplemented simulator effects
+
+If an action manifest exists but the kernel has no simulator `applyEffect` branch, the kernel records `effect.unimplemented` and completes the execution as **`failed`** with `execution.failed` payload reason `effect_not_implemented` (not `succeeded`).
+
 ## Execution Lifecycle
 
 The core successful path is:
@@ -118,3 +136,7 @@ Every lifecycle transition should write an `Event` so the action is replayable i
 - Approval buttons should only call `kernel:approveExecution` or `kernel:rejectExecution`.
 - The client must not decide whether an action is allowed. It can display risk and approval state, but Convex enforces the rule.
 - Do not show secrets or environment values in world state, events, traces, screenshots, or recordings.
+
+## Convex import paths
+
+Contract rows like `world:list` are implemented as Convex modules (for example `api.world.list`). See [CONVEX_API.md](CONVEX_API.md).

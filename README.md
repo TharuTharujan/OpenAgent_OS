@@ -11,30 +11,53 @@ The core idea is simple: human UIs cost agents tokens, latency, and reliability.
 If you are joining the project:
 
 1. Read [`docs/CONTRACT.md`](docs/CONTRACT.md) for shared API shapes, Convex function names, and ownership boundaries.
-2. Read [`docs/TEAM_SPLIT.md`](docs/TEAM_SPLIT.md) for the Person A / Person B checklist, branches, and sync times.
-3. Work from the repo docs, not from someone else's Cursor chat.
+2. Read [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for system diagrams and trust boundaries.
+3. Read [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) for how to run, test, debug, and demo the app.
+4. Read [`docs/TOOLS_AND_SERVICES.md`](docs/TOOLS_AND_SERVICES.md) for runtime stack, scripts, and env vars.
+5. Read [`docs/DEMO_ACCEPTANCE.md`](docs/DEMO_ACCEPTANCE.md) before recording or judging the MVP demo.
+6. Read [`docs/TEAM_SPLIT.md`](docs/TEAM_SPLIT.md) for the Person A / Person B checklist, branches, and sync times.
+7. Work from the repo docs, not from someone else's Cursor chat.
 
 ## Development
-
-This repo is currently being prepared for the first OpenAgentOS build. Once the app scaffold is added, the expected development flow is:
 
 ```sh
 npm install
 ```
 
-Run Convex locally during development:
+In one terminal, start Convex (this configures your deployment and regenerates `convex/_generated`):
 
 ```sh
 npx convex dev
 ```
 
-Run the app with the package script added by the scaffold:
+Copy the deployment URL into `.env.local`:
+
+```sh
+cp .env.local.example .env.local
+# set NEXT_PUBLIC_CONVEX_URL to the URL printed by `npx convex dev`
+```
+
+In another terminal, run the Control Tower:
 
 ```sh
 npm run dev
 ```
 
+Optional: run the minimal agent smoke script (requires the same Convex URL):
+
+```sh
+set CONVEX_URL=...   # Windows
+export CONVEX_URL=... # macOS/Linux
+npm run agent:run
+```
+
 Do not use `npx convex deploy` for local development.
+
+**Note:** This repo includes bootstrap `convex/_generated/*` files so TypeScript and `next build` work before the first `npx convex dev`. After Convex connects, prefer the regenerated outputs from `npx convex dev`.
+
+## Convex module paths
+
+See [`docs/CONVEX_API.md`](docs/CONVEX_API.md) for how contract names like `world:list` map to `api.world.list`.
 
 ## Build Priorities
 
@@ -55,3 +78,9 @@ Suggested branches:
 - `feat/control-tower` for Control Tower UI, product copy, README updates, and demo assets.
 
 Merge or pull often to avoid conflicts. Keep permission enforcement in Convex, not in the client.
+
+## Remaining demo steps
+
+For a repeatable judge-ready walkthrough, follow [`docs/DEMO_ACCEPTANCE.md`](docs/DEMO_ACCEPTANCE.md): seed the kernel, propose a risky execution from the Control Tower, approve it in the inbox, and confirm the trace and world state updates.
+
+Optional: add screenshots under `docs/assets/` (create the folder if needed) before submission; none are committed in-repo by default.
