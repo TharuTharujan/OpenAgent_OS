@@ -1,0 +1,13 @@
+---
+description: OpenAgentOS team split and Convex kernel boundaries
+alwaysApply: true
+---
+
+# OpenAgentOS Team Split
+
+- Convex is the realtime kernel and source of truth for world state, action manifests, permissions, approvals, executions, events, and traces.
+- Person A owns Convex kernel work: schema, indexes, queries, mutations, permission checks, execution state, event traces, seed/reset, and agent runner or SDK helpers.
+- Person B owns the Human Control Tower: world state viewer, action manifest catalog, approval inbox, execution list, trace timeline, README/pitch copy, and demo assets.
+- Do not put permission enforcement in the client. The client may display risk and approval state, but Convex functions must enforce permissions and risky-action approval.
+- Keep UI mock data aligned with `docs/CONTRACT.md` until real Convex functions are available.
+- Do not expose secrets, tokens, `.env` values, or private credentials in world state, events, traces, logs, screenshots, or docs.
