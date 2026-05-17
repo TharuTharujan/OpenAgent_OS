@@ -7,6 +7,16 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import type { ActionManifest } from "../../../shared/contracts";
 
 const DEFAULT_INPUT_BY_ACTION: Record<string, string> = {
+  publish_readiness_packet: JSON.stringify(
+    {
+      observation: "Payment API is degraded; planning rollback after operator review.",
+      selectedNextAction: "rollback_deployment",
+      rationaleForHuman: "Structured world state shows high error rate; rolling back to last known good reduces blast radius.",
+      confidence: 0.82,
+    },
+    null,
+    2,
+  ),
   observe_world: JSON.stringify({ note: "operator smoke test" }, null, 2),
   increment_counter: JSON.stringify({ resourceKey: "demo:counter", delta: 1 }, null, 2),
   bump_counter_batch: JSON.stringify({ resourceKey: "demo:counter", amount: 10 }, null, 2),
@@ -22,13 +32,21 @@ const DEFAULT_INPUT_BY_ACTION: Record<string, string> = {
 };
 
 const ACTION_LABELS: Record<string, string> = {
-  observe_world: "Observe world (audit note)",
-  increment_counter: "Increment counter",
-  bump_counter_batch: "Bump counter (batch)",
-  rollback_deployment: "Rollback deployment (simulated)",
+  publish_readiness_packet: "Share a readiness note (safe, trace only)",
+  observe_world: "Leave an audit note",
+  increment_counter: "Increase counter by a small step",
+  bump_counter_batch: "Increase counter by a larger batch",
+  rollback_deployment: "Simulate rolling back a service",
 };
 
+const READINESS_NEXT_ACTIONS = [
+  { value: "rollback_deployment", label: "Plan a rollback next" },
+  { value: "observe_world", label: "Gather more observations next" },
+  { value: "increment_counter", label: "Adjust a counter next" },
+] as const;
+
 const SIMPLE_FORM_ACTIONS = new Set([
+  "publish_readiness_packet",
   "observe_world",
   "increment_counter",
   "bump_counter_batch",
@@ -72,10 +90,18 @@ function formatInputSummary(actionName: string, inputJson: string): string {
   const d = parsed ?? defaultObjectForAction(actionName);
 
   if (parsed === null && inputJson.trim().length > 0) {
-    return "JSON has errors — expand Advanced to fix the payload.";
+    return "The raw request has a formatting problem — open Advanced to fix it.";
   }
 
   switch (actionName) {
+    case "publish_readiness_packet": {
+      const obs = typeof d.observation === "string" ? d.observation : "";
+      const short = obs.length > 80 ? `${obs.slice(0, 80)}…` : obs;
+      const next = typeof d.selectedNextAction === "string" ? d.selectedNextAction : "next step";
+      return short
+        ? `Shares a readiness note (“${short}”) and points to “${next}” as the likely follow-up.`
+        : `Points to “${next}” as the likely follow-up (observation left blank).`;
+    }
     case "observe_world": {
       const note = typeof d.note === "string" ? d.note : "";
       const short = note.length > 72 ? `${note.slice(0, 72)}…` : note;
@@ -84,12 +110,12 @@ function formatInputSummary(actionName: string, inputJson: string): string {
     case "increment_counter": {
       const key = typeof d.resourceKey === "string" ? d.resourceKey : "demo:counter";
       const delta = typeof d.delta === "number" && Number.isFinite(d.delta) ? d.delta : 1;
-      return `Adds ${delta} to “${key}”.`;
+      return `Adds ${delta} to counter “${key}”.`;
     }
     case "bump_counter_batch": {
       const key = typeof d.resourceKey === "string" ? d.resourceKey : "demo:counter";
       const amount = typeof d.amount === "number" && Number.isFinite(d.amount) ? d.amount : 10;
-      return `Increases “${key}” by ${amount} in one batch.`;
+      return `Adds ${amount} to counter “${key}” in one go.`;
     }
     case "rollback_deployment": {
       const key = typeof d.resourceKey === "string" ? d.resourceKey : "service";
@@ -97,7 +123,7 @@ function formatInputSummary(actionName: string, inputJson: string): string {
       return `Requests rolling “${key}” back toward ${ver}.`;
     }
     default:
-      return "Open Advanced to edit JSON parameters for this action.";
+      return "Open Advanced to edit the raw request for this action.";
   }
 }
 
@@ -154,19 +180,19 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
     setJsonError(null);
     setSubmitError(null);
     if (!agentId) {
-      setSubmitError("Start the demo first so this page has a demo agent id to attach.");
+      setSubmitError("Start the demo first so this page has a session to attach this request to.");
       return;
     }
     let parsed: Record<string, unknown>;
     try {
       const raw: unknown = JSON.parse(inputJson);
       if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-        setJsonError("Input must be a JSON object (not an array or primitive).");
+        setJsonError("Advanced area must contain a single {...} object, not a list or plain text.");
         return;
       }
       parsed = raw as Record<string, unknown>;
     } catch {
-      setJsonError("Invalid JSON — fix the Advanced editor and try again.");
+      setJsonError("That does not look like valid JSON — fix the Advanced editor or use the simple fields above.");
       return;
     }
 
@@ -189,16 +215,15 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
   const usingSuggestedDefaults = payloadMatchesDefault(actionName, inputJson);
 
   return (
-    <section className="panel panel--span">
-      <h2>Try an agent action</h2>
-      <p className="panel-subtitle">
-        Start the demo above first, pick what should happen, then send a proposal — it shows up in runs and approvals
-        the same way a real agent request would.
+    <section className="panel">
+      <h2>Send a sample request</h2>
+      <p className="panel-subtitle--plain">
+        Pick what should happen, adjust the plain-English fields if you like, then send — it appears in runs and
+        approvals just like a real agent request. You almost never need the Advanced section.
       </p>
       {!agentId && !disabled ? (
         <p className="panel-hint">
-          Use <strong>Start demo</strong> in Demo setup first; then this form can attach each try-out to that demo
-          agent.
+          Use <strong>Start demo</strong> in Get started first; then each try-out attaches to that pretend agent.
         </p>
       ) : null}
       {names.length === 0 ? (
@@ -228,10 +253,95 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
 
           {hasSimpleForm ? (
             <div className="form-row form-row--simple-fields">
-              <span className="form-label">Parameters</span>
+              <span className="form-row__section-label">Simple fields</span>
+              <p className="form-stack-intro">Defaults are safe for demos. Change them only if you are exploring edge cases.</p>
+              {actionName === "publish_readiness_packet" ? (
+                <>
+                  <label className="form-field">
+                    <span className="form-field__label">What the agent noticed</span>
+                    <textarea
+                      className="form-textarea form-textarea--compact"
+                      rows={3}
+                      disabled={disabled}
+                      value={typeof formBase.observation === "string" ? formBase.observation : ""}
+                      onChange={(e) => mergeAndSetInput({ observation: e.target.value })}
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span className="form-field__label">Suggested next step</span>
+                    <select
+                      className="form-select"
+                      disabled={disabled}
+                      value={(() => {
+                        const v =
+                          typeof formBase.selectedNextAction === "string"
+                            ? formBase.selectedNextAction
+                            : READINESS_NEXT_ACTIONS[0].value;
+                        return READINESS_NEXT_ACTIONS.some((o) => o.value === v)
+                          ? v
+                          : v || READINESS_NEXT_ACTIONS[0].value;
+                      })()}
+                      onChange={(e) => mergeAndSetInput({ selectedNextAction: e.target.value })}
+                    >
+                      {(() => {
+                        const v =
+                          typeof formBase.selectedNextAction === "string"
+                            ? formBase.selectedNextAction
+                            : READINESS_NEXT_ACTIONS[0].value;
+                        const known = READINESS_NEXT_ACTIONS.some((o) => o.value === v);
+                        return (
+                          <>
+                            {!known && v ? (
+                              <option value={v}>
+                                {v} (from advanced JSON)
+                              </option>
+                            ) : null}
+                            {READINESS_NEXT_ACTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </>
+                        );
+                      })()}
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span className="form-field__label">Why a human should care</span>
+                    <textarea
+                      className="form-textarea form-textarea--compact"
+                      rows={3}
+                      disabled={disabled}
+                      value={typeof formBase.rationaleForHuman === "string" ? formBase.rationaleForHuman : ""}
+                      onChange={(e) => mergeAndSetInput({ rationaleForHuman: e.target.value })}
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span className="form-field__label">How sure is the agent? (0–1)</span>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      disabled={disabled}
+                      value={
+                        typeof formBase.confidence === "number" && Number.isFinite(formBase.confidence)
+                          ? formBase.confidence
+                          : 0.82
+                      }
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        mergeAndSetInput({ confidence: Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0 });
+                      }}
+                    />
+                    <span className="form-field__hint">1 means very confident; 0 means uncertain.</span>
+                  </label>
+                </>
+              ) : null}
               {actionName === "observe_world" ? (
                 <label className="form-field">
-                  <span className="form-field__label">Note</span>
+                  <span className="form-field__label">Short note for the audit log</span>
                   <input
                     className="form-input"
                     type="text"
@@ -244,7 +354,7 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
               {actionName === "increment_counter" ? (
                 <>
                   <label className="form-field">
-                    <span className="form-field__label">Delta</span>
+                    <span className="form-field__label">How much to add</span>
                     <input
                       className="form-input"
                       type="number"
@@ -261,7 +371,7 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
                     />
                   </label>
                   <label className="form-field">
-                    <span className="form-field__label">Resource key</span>
+                    <span className="form-field__label">Which counter</span>
                     <input
                       className="form-input"
                       type="text"
@@ -269,13 +379,14 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
                       value={typeof formBase.resourceKey === "string" ? formBase.resourceKey : ""}
                       onChange={(e) => mergeAndSetInput({ resourceKey: e.target.value })}
                     />
+                    <span className="form-field__hint">Demo default is demo:counter — change only if you know the id.</span>
                   </label>
                 </>
               ) : null}
               {actionName === "bump_counter_batch" ? (
                 <>
                   <label className="form-field">
-                    <span className="form-field__label">Amount</span>
+                    <span className="form-field__label">How many to add at once</span>
                     <input
                       className="form-input"
                       type="number"
@@ -292,7 +403,7 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
                     />
                   </label>
                   <label className="form-field">
-                    <span className="form-field__label">Resource key</span>
+                    <span className="form-field__label">Which counter</span>
                     <input
                       className="form-input"
                       type="text"
@@ -300,13 +411,14 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
                       value={typeof formBase.resourceKey === "string" ? formBase.resourceKey : ""}
                       onChange={(e) => mergeAndSetInput({ resourceKey: e.target.value })}
                     />
+                    <span className="form-field__hint">Demo default is demo:counter.</span>
                   </label>
                 </>
               ) : null}
               {actionName === "rollback_deployment" ? (
                 <>
                   <label className="form-field">
-                    <span className="form-field__label">Resource key</span>
+                    <span className="form-field__label">Service or resource name</span>
                     <input
                       className="form-input"
                       type="text"
@@ -316,7 +428,7 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
                     />
                   </label>
                   <label className="form-field">
-                    <span className="form-field__label">Target version</span>
+                    <span className="form-field__label">Version to roll back toward</span>
                     <input
                       className="form-input"
                       type="text"
@@ -326,7 +438,7 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
                     />
                   </label>
                   <label className="form-field">
-                    <span className="form-field__label">Reason</span>
+                    <span className="form-field__label">Reason (shown in the trace)</span>
                     <input
                       className="form-input"
                       type="text"
@@ -343,7 +455,7 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
           <p className="form-input-summary" aria-live="polite">
             {hasSimpleForm ? (
               <>
-                <span className="form-input-summary__label">Current payload:</span> {inputSummary}
+                <span className="form-input-summary__label">In plain language:</span> {inputSummary}
               </>
             ) : (
               inputSummary
@@ -352,15 +464,16 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
 
           {usingSuggestedDefaults ? (
             <p className="form-defaults-note" role="status">
-              Using suggested parameters for this action — expand Advanced only if you need custom JSON.
+              Using the suggested values for this action — open Advanced only if you need to see or edit the raw
+              request.
             </p>
           ) : null}
 
           <details className="details-advanced" key={actionName}>
-            <summary className="details-advanced__summary">Advanced: edit raw JSON</summary>
+            <summary className="details-advanced__summary">Advanced: raw request (JSON)</summary>
             <div className="details-advanced__body">
               <label className="form-label" htmlFor="propose-input">
-                Kernel input object
+                Raw request body
               </label>
               <textarea
                 id="propose-input"
@@ -382,8 +495,8 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
               />
               <p className="panel-hint details-advanced__hint">
                 {hasSimpleForm
-                  ? "Most demos never need this — the quick fields (or their defaults) already match what the kernel expects."
-                  : "Edit the JSON object passed to the kernel for this action name."}
+                  ? "Most walkthroughs never open this — the fields above already match what the system expects."
+                  : "Edit the JSON object sent with this action name."}
               </p>
             </div>
           </details>
@@ -399,11 +512,19 @@ export function ProposeExecutionPanel({ disabled, agentId, manifests, onProposed
             </p>
           ) : null}
           <div className="panel-actions panel-actions--stack">
-            <button type="button" disabled={!canSubmit} onClick={() => void handlePropose()}>
-              {busy ? "Sending…" : "Send proposal"}
+            <button type="button" className="btn-primary" disabled={!canSubmit} onClick={() => void handlePropose()}>
+              {busy ? "Sending…" : "Send request"}
             </button>
-            <span className="text-muted text-muted--mono">kernel:proposeExecution</span>
           </div>
+          <details className="developer-details">
+            <summary>Developer reference</summary>
+            <div className="developer-details__body">
+              <p>
+                Convex mutation <code className="mono">kernel.proposeExecution</code> with <code className="mono">actionName</code> and{" "}
+                <code className="mono">input</code>.
+              </p>
+            </div>
+          </details>
         </>
       )}
     </section>

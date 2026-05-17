@@ -2,6 +2,7 @@
 
 import type { WorldObject } from "../../../shared/contracts";
 import { formatJson, formatTs } from "../../lib/format";
+import { JsonToggleViewer } from "./JsonToggleViewer";
 
 export function WorldStateViewer({
   objects,
@@ -27,11 +28,11 @@ export function WorldStateViewer({
     <div className="world-viewer">
       <div className="world-viewer__summary">
         <div className="world-stat">
-          <span className="world-stat__label">Objects</span>
+          <span className="world-stat__label">Tracked items</span>
           <span className="world-stat__value">{objects.length}</span>
         </div>
         <div className="world-stat">
-          <span className="world-stat__label">Types</span>
+          <span className="world-stat__label">Categories</span>
           <span className="world-stat__value">{typeCounts.size}</span>
         </div>
         <div className="world-stat world-stat--wide">
@@ -82,7 +83,13 @@ export function WorldStateViewer({
                 {Object.entries(obj.state).map(([k, v]) => (
                   <div key={k} className="world-state-row">
                     <span className="world-state-key">{k}</span>
-                    <span className="world-state-val">{formatJson(v)}</span>
+                    <div className="world-state-val">
+                      {typeof v === "object" && v !== null ? (
+                        <JsonToggleViewer data={v} compact={true} />
+                      ) : (
+                        formatJson(v)
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

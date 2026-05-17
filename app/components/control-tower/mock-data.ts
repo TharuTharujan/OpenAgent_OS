@@ -23,6 +23,19 @@ export const MOCK_WORLD_OBJECTS: WorldObject[] = [
     },
     updatedAt: Date.now() - 60_000,
   },
+  {
+    id: "mock:world:host",
+    resourceKey: "host:demo-folder",
+    type: "HOST",
+    state: {
+      demoScope: "sandbox_folder_organization",
+      note: "Connect Convex + run executor for live inventory.",
+      fileCount: 0,
+      files: [],
+      executorStatus: "offline",
+    },
+    updatedAt: Date.now() - 30_000,
+  },
 ];
 
 export const MOCK_MANIFESTS: ActionManifest[] = [
@@ -66,6 +79,36 @@ export const MOCK_MANIFESTS: ActionManifest[] = [
     inputSchema: { targetVersion: "string", reason: "string", resourceKey: "string" },
     outputSchema: { status: "string", verificationResult: "string" },
   },
+  {
+    id: "mock:manifest:scan",
+    name: "scan_demo_folder",
+    description: "Scan sandbox folder via local executor; updates world inventory.",
+    resourceType: "HOST",
+    risk: "LOW",
+    requiresApproval: false,
+    inputSchema: { note: "string?" },
+    outputSchema: { fileCount: "number", files: "array" },
+  },
+  {
+    id: "mock:manifest:plan",
+    name: "propose_file_organization",
+    description: "Trace-only organization plan (no host filesystem writes from Convex).",
+    resourceType: "HOST",
+    risk: "LOW",
+    requiresApproval: false,
+    inputSchema: { planSummary: "string", movesPreview: "array?" },
+    outputSchema: { published: "boolean" },
+  },
+  {
+    id: "mock:manifest:apply",
+    name: "apply_file_organization",
+    description: "Apply relative moves under sandbox; requires approval; executor completes.",
+    resourceType: "HOST",
+    risk: "HIGH",
+    requiresApproval: true,
+    inputSchema: { plan: { moves: "array" } },
+    outputSchema: { applied: "boolean" },
+  },
 ];
 
 export const MOCK_EXECUTIONS: Execution[] = [
@@ -76,6 +119,14 @@ export const MOCK_EXECUTIONS: Execution[] = [
     input: { resourceKey: "demo:counter", amount: 10 },
     status: "pending_approval",
     createdAt: Date.now() - 120_000,
+  },
+  {
+    id: "mock:exec:host",
+    agentId: "mock:agent:1",
+    actionName: "apply_file_organization",
+    input: { plan: { moves: [{ from: "a.txt", to: "organized/a.txt" }] } },
+    status: "awaiting_host",
+    createdAt: Date.now() - 30_000,
   },
   {
     id: "mock:exec:ok",
@@ -113,6 +164,15 @@ export const MOCK_EVENTS_BY_EXECUTION: Record<string, Event[]> = {
         actionName: "bump_counter_batch",
         eventSource: "kernel",
       },
+    },
+  ],
+  "mock:exec:host": [
+    {
+      id: "mock:ev:host-1",
+      type: "execution.awaiting_host",
+      ts: Date.now() - 29_000,
+      executionId: "mock:exec:host",
+      payload: { actionName: "apply_file_organization", eventSource: "kernel" },
     },
   ],
   "mock:exec:ok": [

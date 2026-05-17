@@ -57,12 +57,12 @@ async function getManifestByName(
     .unique();
 }
 
-/** Returns whether the effect was fully implemented (otherwise execution should fail). */
+/** Kernel effect outcome. `deferred_host` means the local OS executor must finish the work. */
 async function applyEffect(
   ctx: MutationCtx,
   execution: Doc<"executions">,
   manifest: Doc<"actionManifests">,
-): Promise<"implemented" | "unimplemented"> {
+): Promise<"implemented" | "unimplemented" | "deferred_host"> {
   const input = execution.input as Record<string, unknown>;
   const actionName = execution.actionName;
 
@@ -73,6 +73,33 @@ async function applyEffect(
       payload: {
         note: "No world mutation. Structured read path only.",
         eventSource: "kernel",
+      },
+    });
+    return "implemented";
+  }
+
+  if (actionName === "publish_readiness_packet") {
+    const clip = (s: unknown, max: number): string => {
+      const str = typeof s === "string" ? s : String(s ?? "");
+      return str.length <= max ? str : `${str.slice(0, max)}…`;
+    };
+    const observation = clip(input.observation, 1500);
+    const selectedNextAction = clip(input.selectedNextAction, 200);
+    const rationaleForHuman = clip(input.rationaleForHuman, 1500);
+    const confidence =
+      typeof input.confidence === "number" && Number.isFinite(input.confidence)
+        ? input.confidence
+        : undefined;
+    await appendEvent(ctx, {
+      executionId: execution._id,
+      type: "effect.readiness_published",
+      payload: {
+        observation,
+        selectedNextAction,
+        rationaleForHuman,
+        ...(confidence !== undefined ? { confidence } : {}),
+        eventSource: "kernel",
+        note: "Structured readiness only; no API keys or raw prompts stored.",
       },
     });
     return "implemented";
@@ -126,6 +153,68 @@ async function applyEffect(
       payload: { resourceKey, counter: state.counter, bump, eventSource: "kernel" },
     });
     return "implemented";
+  }
+
+  if (actionName === "scan_demo_folder") {
+    await appendEvent(ctx, {
+      executionId: execution._id,
+      type: "effect.host_deferred",
+      payload: {
+        eventSource: "kernel",
+        actionName,
+        reason: "scan_requires_local_executor",
+        note: "Local executor should read OPENAGENTOS_EXECUTOR_ROOT and call hostExecutor.submitHostResult.",
+      },
+    });
+    return "deferred_host";
+  }
+
+  if (actionName === "propose_file_organization") {
+    const clip = (s: unknown, max: number): string => {
+      const str = typeof s === "string" ? s : String(s ?? "");
+      return str.length <= max ? str : `${str.slice(0, max)}…`;
+    };
+    const planSummary = clip(input.planSummary, 2000);
+    const moves = Array.isArray(input.movesPreview) ? input.movesPreview.slice(0, 50) : [];
+    await appendEvent(ctx, {
+      executionId: execution._id,
+      type: "effect.file_plan_proposed",
+      payload: {
+        eventSource: "kernel",
+        planSummary,
+        movesPreview: moves,
+        note: "Trace-only plan; host filesystem is not modified by Convex.",
+      },
+    });
+    return "implemented";
+  }
+
+  if (actionName === "apply_file_organization") {
+    const plan = input.plan as Record<string, unknown> | undefined;
+    const movesRaw = plan?.moves;
+    if (!Array.isArray(movesRaw)) {
+      throw new Error("apply_file_organization requires input.plan.moves as an array.");
+    }
+    const moves = movesRaw.slice(0, 50).map((m) => {
+      if (!m || typeof m !== "object") throw new Error("Each move must be an object with from and to strings.");
+      const rec = m as Record<string, unknown>;
+      if (typeof rec.from !== "string" || typeof rec.to !== "string") {
+        throw new Error("Each move must have string from and to (relative paths under sandbox).");
+      }
+      return { from: rec.from, to: rec.to };
+    });
+    await appendEvent(ctx, {
+      executionId: execution._id,
+      type: "effect.host_deferred",
+      payload: {
+        eventSource: "kernel",
+        actionName,
+        reason: "apply_requires_local_executor",
+        moveCount: moves.length,
+        note: "Local executor validates paths under OPENAGENTOS_EXECUTOR_ROOT then calls submitHostResult.",
+      },
+    });
+    return "deferred_host";
   }
 
   if (actionName === "rollback_deployment") {
@@ -213,7 +302,7 @@ async function runApprovedExecution(
     payload: { actionName: execution.actionName, eventSource: "kernel" },
   });
 
-  let effectResult: "implemented" | "unimplemented";
+  let effectResult: "implemented" | "unimplemented" | "deferred_host";
   try {
     effectResult = await applyEffect(ctx, execution, manifest);
   } catch (error) {
@@ -242,6 +331,20 @@ async function runApprovedExecution(
         reason: "effect_not_implemented",
         actionName: execution.actionName,
         eventSource: "kernel",
+      },
+    });
+    return;
+  }
+
+  if (effectResult === "deferred_host") {
+    await ctx.db.patch(executionId, { status: "awaiting_host" });
+    await appendEvent(ctx, {
+      executionId,
+      type: "execution.awaiting_host",
+      payload: {
+        actionName: execution.actionName,
+        eventSource: "kernel",
+        note: "Waiting for local OS executor (scripts/os-executor.ts).",
       },
     });
     return;
@@ -304,6 +407,35 @@ export const seedDemo = mutation({
       updatedAt: Date.now(),
     });
 
+    await ctx.db.insert("worldObjects", {
+      resourceKey: "host:demo-folder",
+      type: "HOST",
+      state: {
+        demoScope: "sandbox_folder_organization",
+        note: "Point OPENAGENTOS_EXECUTOR_ROOT at a demo folder and run scripts/os-executor.ts with HOST_EXECUTOR_SECRET.",
+        fileCount: 0,
+        files: [],
+        executorStatus: "offline",
+      },
+      updatedAt: Date.now(),
+    });
+
+    await ctx.db.insert("actionManifests", {
+      name: "publish_readiness_packet",
+      description:
+        "Publish a trace-only readiness summary (observation, planned next action, rationale). No secrets; no raw prompts.",
+      resourceType: "ANY",
+      risk: "LOW",
+      requiresApproval: false,
+      inputSchema: {
+        observation: "string",
+        selectedNextAction: "string",
+        rationaleForHuman: "string",
+        confidence: "number?",
+      },
+      outputSchema: { published: "boolean" },
+    });
+
     await ctx.db.insert("actionManifests", {
       name: "observe_world",
       description: "Append-only observation with no world mutation.",
@@ -344,6 +476,45 @@ export const seedDemo = mutation({
       outputSchema: { status: "string", verificationResult: "string" },
     });
 
+    await ctx.db.insert("actionManifests", {
+      name: "scan_demo_folder",
+      description:
+        "Scan the configured local demo folder (OPENAGENTOS_EXECUTOR_ROOT) and publish file inventory to world state. Deferred to local executor.",
+      resourceType: "HOST",
+      risk: "LOW",
+      requiresApproval: false,
+      inputSchema: { note: "string?" },
+      outputSchema: { fileCount: "number", files: "array" },
+    });
+
+    await ctx.db.insert("actionManifests", {
+      name: "propose_file_organization",
+      description:
+        "Publish a trace-only file organization plan (summary + optional move preview). Does not touch the host filesystem.",
+      resourceType: "HOST",
+      risk: "LOW",
+      requiresApproval: false,
+      inputSchema: { planSummary: "string", movesPreview: "array?" },
+      outputSchema: { published: "boolean" },
+    });
+
+    await ctx.db.insert("actionManifests", {
+      name: "apply_file_organization",
+      description:
+        "Apply a relative-path move plan under the sandbox folder. High risk; requires human approval; completed by local executor.",
+      resourceType: "HOST",
+      risk: "HIGH",
+      requiresApproval: true,
+      inputSchema: { plan: { moves: "array<{from:string,to:string}>" } },
+      outputSchema: { applied: "boolean" },
+    });
+
+    await ctx.db.insert("permissions", {
+      agentId,
+      actionName: "publish_readiness_packet",
+      effect: "allow",
+    });
+
     await ctx.db.insert("permissions", {
       agentId,
       actionName: "bump_counter_batch",
@@ -365,6 +536,24 @@ export const seedDemo = mutation({
     await ctx.db.insert("permissions", {
       agentId,
       actionName: "increment_counter",
+      effect: "allow",
+    });
+
+    await ctx.db.insert("permissions", {
+      agentId,
+      actionName: "scan_demo_folder",
+      effect: "allow",
+    });
+
+    await ctx.db.insert("permissions", {
+      agentId,
+      actionName: "propose_file_organization",
+      effect: "allow",
+    });
+
+    await ctx.db.insert("permissions", {
+      agentId,
+      actionName: "apply_file_organization",
       effect: "allow",
     });
 

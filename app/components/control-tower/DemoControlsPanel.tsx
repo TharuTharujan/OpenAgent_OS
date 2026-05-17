@@ -17,14 +17,12 @@ export function DemoControlsPanel({
 }: Props) {
   return (
     <section className="panel">
-      <h2>Demo setup</h2>
-      <p className="panel-subtitle">
-        Load a safe sample world and a pretend agent, or clear everything to start over.{" "}
-        <span className="text-muted text-muted--mono">kernel:seedDemo</span> ·{" "}
-        <span className="text-muted text-muted--mono">kernel:resetDemo</span>
+      <h2>Get started</h2>
+      <p className="panel-subtitle--plain">
+        Load a safe sample workspace and a pretend agent, or clear everything to try again from scratch.
       </p>
       <div className="panel-actions panel-actions--demo-buttons">
-        <button type="button" disabled={disabled} onClick={() => void onSeed()}>
+        <button type="button" className="btn-primary" disabled={disabled} onClick={() => void onSeed()}>
           Start demo
         </button>
         <button type="button" className="btn-danger" disabled={disabled} onClick={onReset}>
@@ -33,36 +31,50 @@ export function DemoControlsPanel({
       </div>
       {!disabled && demoAgentId ? (
         <p className="panel-hint">
-          Below, <strong>Try an agent action</strong> tags each test run with this id so the backend knows which demo
-          agent asked — copy it only if an external tool needs the same label:{" "}
-          <code className="mono" title="Demo agent identifier for proposals from this page">
+          You are using a <strong>demo session label</strong> so the system can tie requests to this walkthrough. You
+          only need to copy it if another tool asks for the same id:{" "}
+          <code className="mono" title="Demo session identifier">
             {demoAgentId}
           </code>
         </p>
       ) : !disabled ? (
         <p className="panel-hint">
-          Choose <strong>Start demo</strong> first. That creates the demo agent this page uses when you send a sample
-          action.
+          Tap <strong>Start demo</strong> first — that creates the pretend agent used when you send a sample request
+          below.
         </p>
       ) : null}
       <p className="lead panel-actions-follow">
         {pendingCountLabel === "…" ? (
-          <>Checking how many steps need your sign-off…</>
+          <>Checking how many items need your sign-off…</>
         ) : pendingCountLabel === "0" ? (
           <>
-            Nothing is waiting for a human decision — <strong>0</strong> open requests.
+            Nothing is waiting for you — <strong>0</strong> open approvals.
           </>
         ) : (
           <>
-            <strong>{pendingCountLabel}</strong> step{pendingCountLabel === "1" ? "" : "s"} need your decision — use the
+            <strong>{pendingCountLabel}</strong> item{pendingCountLabel === "1" ? "" : "s"} need your decision — use the
             approval inbox below.
           </>
         )}
       </p>
-      <p className="panel-hint">
-        <strong>Reset demo</strong> removes sample data only (world snapshot, runs, approval queue). It does not turn
-        off safety checks; the server still decides what is allowed.
-      </p>
+      <details className="developer-details">
+        <summary>Running the host-folder demo from a terminal</summary>
+        <div className="developer-details__body">
+          <p>
+            See <code className="mono">docs/HOST_DEMO.md</code>. Typical flow: <code className="mono">npm run adapter</code>{" "}
+            in one terminal and <code className="mono">npm run executor:run</code> in another. Convex stays the source of
+            truth; the executor only completes <code className="mono">awaiting_host</code> steps.
+          </p>
+        </div>
+      </details>
+      <details className="developer-details">
+        <summary>Kernel function names (Convex)</summary>
+        <div className="developer-details__body">
+          <p>
+            Start / reset use <code className="mono">kernel.seedDemo</code> and <code className="mono">kernel.resetDemo</code>.
+          </p>
+        </div>
+      </details>
     </section>
   );
 }

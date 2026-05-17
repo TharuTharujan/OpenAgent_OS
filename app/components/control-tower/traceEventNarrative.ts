@@ -34,6 +34,10 @@ export function summarizeTraceEvent(type: string, payload: Record<string, unknow
       return mode ? `Execution approved (${mode}).` : "Execution approved; proceeding.";
     case "execution.running":
       return actionName ? `Kernel started running “${actionName}”.` : "Kernel started running the action.";
+    case "execution.awaiting_host":
+      return actionName
+        ? `Waiting for local host executor to finish “${actionName}” (see scripts/os-executor.ts).`
+        : "Waiting for local host executor.";
     case "execution.succeeded":
       return actionName ? `Execution finished successfully (“${actionName}”).` : "Execution finished successfully.";
     case "execution.failed":
@@ -42,6 +46,13 @@ export function summarizeTraceEvent(type: string, payload: Record<string, unknow
       return reason ? `Execution denied: ${reason}.` : "Execution denied by policy.";
     case "effect.observe_world":
       return "Effect: observation recorded (no world mutation).";
+    case "effect.readiness_published": {
+      const next =
+        typeof payload.selectedNextAction === "string" ? payload.selectedNextAction : undefined;
+      return next
+        ? `Effect: readiness packet published (planned next action: ${next}).`
+        : "Effect: readiness packet published (structured agent summary).";
+    }
     case "effect.world_patched":
       if (resourceKey !== undefined && counter !== undefined) {
         return bump !== undefined
@@ -59,6 +70,20 @@ export function summarizeTraceEvent(type: string, payload: Record<string, unknow
         : "Effect: rollback verified.";
     case "effect.unimplemented":
       return message ? `Effect not implemented: ${message}` : "Effect not implemented for this action.";
+    case "effect.host_deferred": {
+      const reason = typeof payload.reason === "string" ? payload.reason : undefined;
+      return reason ? `Deferred to host executor (${reason}).` : "Deferred to host executor.";
+    }
+    case "effect.file_plan_proposed": {
+      const summary = typeof payload.planSummary === "string" ? payload.planSummary : undefined;
+      return summary
+        ? `File organization plan published (trace-only): ${summary.slice(0, 160)}${summary.length > 160 ? "…" : ""}`
+        : "File organization plan published (trace-only).";
+    }
+    case "host.executor_report": {
+      const outcome = typeof payload.outcome === "string" ? payload.outcome : undefined;
+      return outcome ? `Host executor reported outcome: ${outcome}.` : "Host executor reported results.";
+    }
     default:
       return "Event recorded.";
   }

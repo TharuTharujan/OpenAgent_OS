@@ -11,6 +11,7 @@
 import type * as approvals from "../approvals.js";
 import type * as events from "../events.js";
 import type * as executions from "../executions.js";
+import type * as hostExecutor from "../hostExecutor.js";
 import type * as kernel from "../kernel.js";
 import type * as lib_events from "../lib/events.js";
 import type * as lib_shapes from "../lib/shapes.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   approvals: typeof approvals;
   events: typeof events;
   executions: typeof executions;
+  hostExecutor: typeof hostExecutor;
   kernel: typeof kernel;
   "lib/events": typeof lib_events;
   "lib/shapes": typeof lib_shapes;

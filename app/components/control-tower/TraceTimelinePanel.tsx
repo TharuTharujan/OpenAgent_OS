@@ -15,9 +15,19 @@ export function TraceTimelinePanel({
   executionSummary?: Execution | null;
 }) {
   return (
-    <section className="panel panel--span">
-      <h2>Trace timeline</h2>
-      <p className="panel-subtitle">events:listByExecution</p>
+    <section className="panel">
+      <h2>Activity timeline</h2>
+      <p className="panel-subtitle--plain">
+        A step-by-step replay of the selected run — plain language first, raw details when you expand an entry.
+      </p>
+      <details className="developer-details">
+        <summary>API reference</summary>
+        <div className="developer-details__body">
+          <p>
+            <code className="mono">events.listByExecution</code>
+          </p>
+        </div>
+      </details>
       {executionId && executionSummary ? (
         <p className="panel-hint">
           <span className="mono">{executionSummary.actionName}</span> · {executionSummary.status}
@@ -29,7 +39,7 @@ export function TraceTimelinePanel({
         </p>
       ) : null}
       {!executionId ? (
-        <p className="panel-placeholder">Select an execution above to replay its events.</p>
+        <p className="panel-placeholder">Pick a run in the table above to replay its timeline.</p>
       ) : events === undefined ? (
         <p className="panel-placeholder" role="status">
           Loading trace for <code className="mono">{executionId}</code>…

@@ -132,85 +132,128 @@ export default function HomePage() {
 
   return (
     <main>
-      <h1>OpenAgentOS Control Tower</h1>
+      <header className="page-header">
+        <div>
+          <h1>Control Tower</h1>
+          <p className="page-hero__tagline">Watch agent activity, approve sensitive steps, and review what happened — in one place.</p>
+        </div>
+        <details className="developer-details">
+          <summary>For developers: Convex and contracts</summary>
+          <div className="developer-details__body">
+            <p>
+              With <code className="mono">NEXT_PUBLIC_CONVEX_URL</code> set, this page reads live kernel data from Convex.
+              Exact payload shapes live in <code className="mono">docs/CONTRACT.md</code> in the repo.
+            </p>
+          </div>
+        </details>
+      </header>
 
       <div className="callout" role="region" aria-label="What this screen is for">
         <p className="callout__text">
-          This is your review desk: see what an automated agent suggested, say yes or no to anything sensitive, and
-          scroll back through what happened so you always know the outcome.
+          This screen is your review desk: see what an automated agent suggested, approve or decline anything sensitive,
+          and scroll the timeline so the outcome is never a mystery.
         </p>
       </div>
 
-      <p className="lead">
-        Read the live picture of work in progress, approvals, and history in plain language. When you wire up the app,
-        Convex holds the shared kernel behind this page; developers can match exact shapes in{" "}
-        <code>docs/CONTRACT.md</code> in the repo.
-      </p>
+      <ol className="quick-steps" aria-label="How to explore the demo">
+        <li>
+          <span>
+            <strong>Start the demo</strong> to load sample data and a pretend agent.
+          </span>
+        </li>
+        <li>
+          <span>
+            <strong>Send a sample request</strong> using the simple fields (defaults are safe).
+          </span>
+        </li>
+        <li>
+          <span>
+            <strong>Approve or reject</strong> anything waiting in the inbox, then follow the run in executions and the
+            timeline.
+          </span>
+        </li>
+      </ol>
 
       {missingUrl ? (
         <div className="banner" role="status">
-          <strong className="banner__title">Running without a live backend.</strong> Add{" "}
-          <code>NEXT_PUBLIC_CONVEX_URL</code> to <code>.env.local</code> (copy the deployment URL from{" "}
-          <code>npx convex dev</code>) so the dashboard loads real data. Until then, the panels below use safe,
-          contract-shaped sample data so you can still click through the demo.
+          <strong className="banner__title">Preview mode — sample data only</strong>
+          The dashboard is not connected to your live backend yet. You can still click through every panel using safe
+          sample data. To use real data, add <code>NEXT_PUBLIC_CONVEX_URL</code> to <code>.env.local</code> with the URL
+          from your Convex dev deployment (<code>npx convex dev</code> shows it).
         </div>
       ) : null}
 
-      <div className="grid">
-        <DemoControlsPanel
-          disabled={missingUrl}
-          pendingCountLabel={pendingCountLabel}
-          demoAgentId={lastSeededAgentId}
-          onSeed={async () => {
-            const result = await seedDemo({});
-            if (result.agentId) {
-              setLastSeededAgentId(result.agentId);
-            }
-          }}
-          onReset={() => {
-            if (typeof window !== "undefined" && !window.confirm("Reset all demo kernel data?")) return;
-            void (async () => {
-              await resetDemo({});
-              setLastSeededAgentId(null);
-            })();
-          }}
-        />
+      <div className="dashboard-layout">
+        <aside className="dashboard-sidebar">
+          <DemoControlsPanel
+            disabled={missingUrl}
+            pendingCountLabel={pendingCountLabel}
+            demoAgentId={lastSeededAgentId}
+            onSeed={async () => {
+              const result = await seedDemo({});
+              if (result.agentId) {
+                setLastSeededAgentId(result.agentId);
+              }
+            }}
+            onReset={() => {
+              if (typeof window !== "undefined" && !window.confirm("Reset all demo kernel data?")) return;
+              void (async () => {
+                await resetDemo({});
+                setLastSeededAgentId(null);
+              })();
+            }}
+          />
 
-        <ProposeExecutionPanel
-          disabled={missingUrl}
-          agentId={lastSeededAgentId}
-          manifests={manifestsDisplay}
-          onProposed={(executionId) => setSelectedExecutionId(executionId)}
-        />
+          <ProposeExecutionPanel
+            disabled={missingUrl}
+            agentId={lastSeededAgentId}
+            manifests={manifestsDisplay}
+            onProposed={(executionId) => setSelectedExecutionId(executionId)}
+          />
 
-        <section className="panel panel--span">
-          <h2>World state</h2>
-          <p className="panel-subtitle">Contract: world:list · Convex: api.world.list</p>
-          <WorldStateViewer objects={worldDisplay} source={missingUrl ? "mock" : "convex"} />
-        </section>
+          <ManifestCatalogPanel manifests={manifestsDisplay} />
+        </aside>
 
-        <ManifestCatalogPanel manifests={manifestsDisplay} />
+        <div className="dashboard-main">
+          <section className="panel">
+            <h2>Live snapshot</h2>
+            <p className="panel-subtitle--plain">
+              Counters, services, and other values the agent can read or change — your ground truth for the demo.
+            </p>
+            <details className="developer-details">
+              <summary>API reference</summary>
+              <div className="developer-details__body">
+                <p>
+                  Convex query <code className="mono">api.world.list</code> · contract <code className="mono">world:list</code>
+                </p>
+              </div>
+            </details>
+            <WorldStateViewer objects={worldDisplay} source={missingUrl ? "mock" : "convex"} />
+          </section>
 
-        <ApprovalInboxPanel
-          pending={pendingDisplay}
-          disabled={missingUrl}
-          onApprove={(id) => void handleApprove(id)}
-          onReject={(id) => void handleReject(id)}
-        />
+          <ApprovalInboxPanel
+            pending={pendingDisplay}
+            disabled={missingUrl}
+            onApprove={(id) => void handleApprove(id)}
+            onReject={(id) => void handleReject(id)}
+          />
 
-        <ExecutionPanel
-          executions={executionsDisplay}
-          selectedId={selectedExecutionId}
-          onSelect={(id) => setSelectedExecutionId(id)}
-          detail={executionDetailBlock.detail}
-          detailPhase={!selectedExecutionId ? "idle" : executionDetailBlock.phase}
-        />
+          <div className="dashboard-split">
+            <ExecutionPanel
+              executions={executionsDisplay}
+              selectedId={selectedExecutionId}
+              onSelect={(id) => setSelectedExecutionId(id)}
+              detail={executionDetailBlock.detail}
+              detailPhase={!selectedExecutionId ? "idle" : executionDetailBlock.phase}
+            />
 
-        <TraceTimelinePanel
-          events={traceEvents}
-          executionId={selectedExecutionId}
-          executionSummary={traceExecutionSummary}
-        />
+            <TraceTimelinePanel
+              events={traceEvents}
+              executionId={selectedExecutionId}
+              executionSummary={traceExecutionSummary}
+            />
+          </div>
+        </div>
       </div>
     </main>
   );

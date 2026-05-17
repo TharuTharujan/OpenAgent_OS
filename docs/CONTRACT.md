@@ -14,7 +14,7 @@ Convex is the realtime kernel and source of truth. The client can request action
 
 ## Convex Function Contracts
 
-Use these names as the shared contract between the kernel and UI. Implementation can map them to the repo's file/module style later, but both teammates should keep these semantics stable.
+Use these names as the shared contract between the kernel, UI, CLI adapter, agent runner, and host executor. In this repo they are implemented as Convex module exports; see [`docs/CONVEX_API.md`](CONVEX_API.md) for exact `api.<module>.<export>` paths.
 
 | Function | Type | Purpose | Owner |
 | --- | --- | --- | --- |
@@ -26,13 +26,16 @@ Use these names as the shared contract between the kernel and UI. Implementation
 | `events:listByExecution` | query | Return trace events for one execution. | Person A |
 | `kernel:proposeExecution` | mutation | Agent syscall to propose or request an action execution. | Person A |
 | `kernel:approveExecution` | mutation | Human syscall to approve a pending execution. Optional `operatorHint` (max 200 chars) is stored on the approval event for audit demos. | Person A |
-| `kernel:rejectExecution` | mutation | Human syscall to reject a pending execution. | Person A |
+| `kernel:rejectExecution` | mutation | Human syscall to reject a pending execution. Optional `reason` is stored on the rejection event. | Person A |
 | `kernel:seedDemo` | mutation | Seed repeatable demo world objects, manifests, and agents. | Person A |
 | `kernel:resetDemo` | mutation | Reset demo data so the walkthrough can run again. | Person A |
+| `hostExecutor:listAwaitingHost` | query | List executions with status `awaiting_host` for the local OS executor poller. | Person A |
+| `hostExecutor:submitHostResult` | mutation | Host executor callback: completes `awaiting_host` executions (requires `HOST_EXECUTOR_SECRET` on Convex). | Person A |
+| `hostExecutor:pulse` | mutation | Host executor heartbeat; updates `host:demo-folder` world state timestamps. | Person A |
 
 ## Shared Shapes
 
-Person B can build mock JSON and UI props from these shapes before Convex is fully implemented. Person A should make Convex return these field names.
+Control Tower props, mock preview data, agent outputs, and Convex DTO mappers should keep these field names stable.
 
 ```ts
 export type WorldObject = {
@@ -68,6 +71,7 @@ export type Execution = {
     | "pending_approval"
     | "approved"
     | "running"
+    | "awaiting_host"
     | "succeeded"
     | "failed"
     | "denied"
@@ -87,6 +91,8 @@ export type Event = {
 };
 ```
 
+Current Convex events are execution-scoped and include `executionId`. The shared TypeScript DTO keeps it optional so future non-execution kernel events can use the same shape without breaking clients.
+
 ### Event payload conventions (optional keys)
 
 Convex may attach these keys inside `payload` for demo traceability. They are not required for all events:
@@ -100,6 +106,14 @@ Convex may attach these keys inside `payload` for demo traceability. They are no
 - **Default deny**: if there is no explicit `allow` row for that pair, the execution is **denied** (unless you add a row).
 - An explicit `deny` row always wins over `allow` for the same pair.
 - `kernel:seedDemo` inserts `allow` rows for the demo agent so the packaged walkthrough works out of the box.
+- Packaged demo manifests include `publish_readiness_packet` (low-risk trace-only readiness summary), `observe_world`, `increment_counter`, `bump_counter_batch`, `rollback_deployment`, plus host demo actions `scan_demo_folder`, `propose_file_organization`, and `apply_file_organization`.
+
+### Current demo clients
+
+- **Control Tower** uses the contract through `convex/react` hooks in `app/page.tsx`.
+- **Agent runner** uses the contract through `ConvexHttpClient` in `scripts/agent-runner.ts`.
+- **Adapter CLI** exposes shell-friendly commands in `scripts/openagent-adapter.ts` for agents that cannot import Convex code directly.
+- **Host executor** polls `hostExecutor:listAwaitingHost` and submits results through `hostExecutor:submitHostResult`; it never receives permission authority from the client.
 
 ### Unimplemented simulator effects
 
@@ -119,6 +133,18 @@ Low-risk actions may skip approval:
 proposed -> running -> succeeded
 ```
 
+Host-deferred actions (local filesystem) may transition like:
+
+```txt
+proposed -> running -> awaiting_host -> succeeded
+```
+
+High-risk host apply path:
+
+```txt
+proposed -> pending_approval -> approved -> running -> awaiting_host -> succeeded
+```
+
 Failure branches:
 
 ```txt
@@ -131,8 +157,8 @@ Every lifecycle transition should write an `Event` so the action is replayable i
 
 ## UI Integration Rules
 
-- Build UI components against the shared shapes first, using mock JSON if Convex functions are not ready.
-- Replace mocks with Convex queries and mutations as Person A ships them.
+- Build UI components against the shared shapes and keep preview mocks aligned with seeded Convex data.
+- Treat Convex queries and mutations as the primary runtime path; mocks are only for disconnected preview mode.
 - Approval buttons should only call `kernel:approveExecution` or `kernel:rejectExecution`.
 - The client must not decide whether an action is allowed. It can display risk and approval state, but Convex enforces the rule.
 - Do not show secrets or environment values in world state, events, traces, screenshots, or recordings.

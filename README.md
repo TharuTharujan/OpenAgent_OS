@@ -15,8 +15,19 @@ If you are joining the project:
 3. Read [`docs/USAGE_GUIDE.md`](docs/USAGE_GUIDE.md) for how to run, test, debug, and demo the app.
 4. Read [`docs/TOOLS_AND_SERVICES.md`](docs/TOOLS_AND_SERVICES.md) for runtime stack, scripts, and env vars.
 5. Read [`docs/DEMO_ACCEPTANCE.md`](docs/DEMO_ACCEPTANCE.md) before recording or judging the MVP demo.
-6. Read [`docs/TEAM_SPLIT.md`](docs/TEAM_SPLIT.md) for the Person A / Person B checklist, branches, and sync times.
-7. Work from the repo docs, not from someone else's Cursor chat.
+6. Read [`docs/HOST_DEMO.md`](docs/HOST_DEMO.md) for the sandbox folder + local executor walkthrough.
+7. Read [`docs/TEAM_SPLIT.md`](docs/TEAM_SPLIT.md) for the Person A / Person B ownership checklist and branch guidance.
+8. Work from the repo docs, not from someone else's Cursor chat.
+
+## Current MVP State
+
+The repo now contains the complete local demo loop:
+
+- A Convex kernel with world objects, action manifests, permissions, executions, and trace events.
+- A Next.js Control Tower that can seed/reset the demo, propose actions, approve/reject risky work, inspect executions, and replay traces.
+- A framework-agnostic CLI adapter for agents that can call shell commands.
+- A local host executor for the sandbox-folder demo, gated by `HOST_EXECUTOR_SECRET` and `OPENAGENTOS_EXECUTOR_ROOT`.
+- A scripted host demo flow that creates sample clutter, scans the sandbox, proposes an organization plan, and applies it after approval.
 
 ## Development
 
@@ -34,7 +45,7 @@ Copy the deployment URL into `.env.local`:
 
 ```sh
 cp .env.local.example .env.local
-# set NEXT_PUBLIC_CONVEX_URL to the URL printed by `npx convex dev`
+# add NEXT_PUBLIC_CONVEX_URL with the URL printed by `npx convex dev`
 ```
 
 In another terminal, run the Control Tower:
@@ -43,12 +54,42 @@ In another terminal, run the Control Tower:
 npm run dev
 ```
 
-Optional: run the minimal agent smoke script (requires the same Convex URL):
+Optional: run the agent runner (requires the same Convex URL):
 
 ```sh
 set CONVEX_URL=...   # Windows
 export CONVEX_URL=... # macOS/Linux
 npm run agent:run
+```
+
+Without `OPENAI_API_KEY`, this runs a **smoke** path (scripted proposals + CLI auto-approve). With `OPENAI_API_KEY` in `.env.local` (see [`.env.local.example`](.env.local.example)), it runs a **live LLM** path: reads world + manifests, publishes a readiness trace event, proposes a model-chosen action, and leaves high-risk work **pending approval** in the Control Tower unless you set `AGENT_RUNNER_AUTO_APPROVE=1`.
+
+### Framework-agnostic agent adapter (CLI)
+
+Any agent that can invoke shell commands can use the same Convex contract without touching the Control Tower UI:
+
+```sh
+npm run adapter -- help
+npm run adapter -- seed
+npm run adapter -- world:list
+npm run adapter -- manifests:list
+npm run adapter -- propose --agentId <id> --action observe_world --input "{}"
+```
+
+See [`docs/HOST_DEMO.md`](docs/HOST_DEMO.md) for the sandbox executor. Set `HOST_EXECUTOR_SECRET` in the Convex dashboard **and** in `.env.local` for `npm run executor:run`.
+
+### Host OS executor (local)
+
+```sh
+set OPENAGENTOS_EXECUTOR_ROOT=C:\path\to\sandbox
+set HOST_EXECUTOR_SECRET=your-shared-secret
+npm run executor:run
+```
+
+Optional orchestrated demo (writes sample clutter, proposes scan/plan/apply):
+
+```sh
+npm run demo:host
 ```
 
 Do not use `npx convex deploy` for local development.
@@ -59,9 +100,9 @@ Do not use `npx convex deploy` for local development.
 
 See [`docs/CONVEX_API.md`](docs/CONVEX_API.md) for how contract names like `world:list` map to `api.world.list`.
 
-## Build Priorities
+## Implemented MVP Primitives
 
-The first version should prove the kernel:
+The current demo proves these kernel primitives:
 
 - World State: structured objects agents read instead of dashboards.
 - Action Manifests: typed contracts agents invoke instead of buttons.
@@ -81,6 +122,6 @@ Merge or pull often to avoid conflicts. Keep permission enforcement in Convex, n
 
 ## Remaining demo steps
 
-For a repeatable judge-ready walkthrough, follow [`docs/DEMO_ACCEPTANCE.md`](docs/DEMO_ACCEPTANCE.md): seed the kernel, propose a risky execution from the Control Tower, approve it in the inbox, and confirm the trace and world state updates.
+For a repeatable judge-ready walkthrough, follow [`docs/DEMO_ACCEPTANCE.md`](docs/DEMO_ACCEPTANCE.md): seed the kernel, propose a risky execution from the Control Tower or adapter, approve it in the inbox, and confirm the trace and world state updates. For the host story, run the executor and follow [`docs/HOST_DEMO.md`](docs/HOST_DEMO.md).
 
 Optional: add screenshots under `docs/assets/` (create the folder if needed) before submission; none are committed in-repo by default.

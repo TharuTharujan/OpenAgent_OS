@@ -30,6 +30,7 @@ export type ExecutionDTO = {
     | "pending_approval"
     | "approved"
     | "running"
+    | "awaiting_host"
     | "succeeded"
     | "failed"
     | "denied"

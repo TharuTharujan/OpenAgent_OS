@@ -8,6 +8,7 @@ const executionStatus = v.union(
   v.literal("pending_approval"),
   v.literal("approved"),
   v.literal("running"),
+  v.literal("awaiting_host"),
   v.literal("succeeded"),
   v.literal("failed"),
   v.literal("denied"),

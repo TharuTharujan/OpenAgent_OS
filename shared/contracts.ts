@@ -31,6 +31,7 @@ export type Execution = {
     | "pending_approval"
     | "approved"
     | "running"
+    | "awaiting_host"
     | "succeeded"
     | "failed"
     | "denied"

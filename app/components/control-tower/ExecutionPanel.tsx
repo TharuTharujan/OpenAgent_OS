@@ -13,6 +13,8 @@ function statusClass(status: Execution["status"]): string {
       return "status-badge status-badge--bad";
     case "pending_approval":
       return "status-badge status-badge--warn";
+    case "awaiting_host":
+      return "status-badge status-badge--warn";
     case "running":
     case "approved":
     case "proposed":
@@ -38,28 +40,46 @@ export function ExecutionPanel({
 }) {
   if (executions === undefined) {
     return (
-      <section className="panel panel--span">
-        <h2>Executions</h2>
-        <p className="panel-subtitle">executions:list · executions:get</p>
+      <section className="panel">
+        <h2>Runs</h2>
+        <p className="panel-subtitle--plain">Loading the list of agent runs…</p>
+        <details className="developer-details">
+          <summary>API reference</summary>
+          <div className="developer-details__body">
+            <p>
+              <code className="mono">executions.list</code> · <code className="mono">executions.get</code>
+            </p>
+          </div>
+        </details>
         <p className="panel-placeholder" role="status">
-          Loading executions…
+          Loading…
         </p>
       </section>
     );
   }
 
   return (
-    <section className="panel panel--span">
-      <h2>Executions</h2>
-      <p className="panel-subtitle">Select a row to load its trace and details (executions:get).</p>
+    <section className="panel">
+      <h2>Runs</h2>
+      <p className="panel-subtitle--plain">
+        Each row is one agent attempt. Select a row to see its story in the timeline below.
+      </p>
+      <details className="developer-details">
+        <summary>API reference</summary>
+        <div className="developer-details__body">
+          <p>
+            <code className="mono">executions.list</code> · detail from <code className="mono">executions.get</code>
+          </p>
+        </div>
+      </details>
       {selectedId && detailPhase === "loading" ? (
         <p className="panel-placeholder" role="status">
-          Loading execution <code className="mono">{selectedId}</code>…
+          Loading run <code className="mono">{selectedId}</code>…
         </p>
       ) : null}
       {selectedId && detailPhase === "ready" && detail === null ? (
         <p className="panel-placeholder" role="status">
-          Execution <code className="mono">{selectedId}</code> not found.
+          That run id was not found.
         </p>
       ) : null}
       {selectedId && detailPhase === "ready" && detail ? (
@@ -78,7 +98,7 @@ export function ExecutionPanel({
         </div>
       ) : null}
       {executions.length === 0 ? (
-        <p className="panel-placeholder">No executions yet. Seed the demo, then propose one above.</p>
+        <p className="panel-placeholder">No runs yet. Start the demo, then send a sample request above.</p>
       ) : (
         <div className="exec-table-wrap">
           <table className="exec-table">
@@ -86,8 +106,8 @@ export function ExecutionPanel({
               <tr>
                 <th>Status</th>
                 <th>Action</th>
-                <th>Created</th>
-                <th>Input</th>
+                <th>When</th>
+                <th>Request snapshot</th>
               </tr>
             </thead>
             <tbody>
